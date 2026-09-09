@@ -156,6 +156,21 @@
       <div class="dialog-body"><ol class="schedule-list full-schedule-list" id="full-schedule-list"></ol></div>
     </dialog>
 
+    <dialog class="modal" id="journal-dialog" aria-labelledby="journal-dialog-title">
+      <form id="journal-form">
+        <header class="dialog-header">
+          <div><p class="eyebrow">JOURNAL</p><h2 id="journal-dialog-title">今日の日記</h2></div>
+          <button class="icon-button dialog-close" type="button" aria-label="閉じる">×</button>
+        </header>
+        <div class="dialog-body">
+          <p class="journal-note">一日を終える前に、今日のことを1文字以上残してください。</p>
+          <label class="field"><span>日記</span><textarea id="journal-text" rows="8" maxlength="10000" required placeholder="今日あったこと、感じたことなど"></textarea></label>
+          <p class="form-error" id="journal-form-error" hidden></p>
+          <button class="primary-button full-width" type="submit">日記を保存して一日を終了</button>
+        </div>
+      </form>
+    </dialog>
+
     <dialog class="modal settings-dialog" id="settings-dialog" aria-labelledby="settings-title">
       <header class="dialog-header">
         <div><p class="eyebrow">SETTINGS</p><h2 id="settings-title">設定</h2></div>
@@ -169,7 +184,7 @@
           <button class="danger-button full-width" id="end-day-button" type="button" disabled>今日を終了</button>
         </section>
         <section class="settings-section">
-          <div class="settings-heading-row"><div><h3>スケジュール</h3><p>起床からの経過時間で設定します。</p></div><button class="ghost-button" id="add-schedule" type="button">＋ 予定</button></div>
+          <div class="settings-heading-row"><div><h3>スケジュール</h3><p>先頭は00:00開始、それ以降は直前の終了時刻から始まります。</p></div><button class="ghost-button" id="add-schedule" type="button">＋ 末尾に追加</button></div>
           <div class="form-error" id="schedule-errors" hidden></div>
           <div class="schedule-editor" id="schedule-editor"></div>
           <button class="primary-button full-width" id="save-schedule" type="button">保存</button>
@@ -179,11 +194,11 @@
           <div class="sync-actions"><button class="primary-button full-width" id="create-sync-room" type="button">同期を開始</button><button class="ghost-button full-width" id="copy-sync-link" type="button" hidden>共有リンクをコピー</button><button class="danger-button full-width" id="leave-sync-room" type="button" hidden>この端末の同期を解除</button></div>
           <p class="sync-detail" id="sync-detail" aria-live="polite">現在、この端末内だけに保存されています。</p>
         </section>
-        <section class="settings-section"><h3>データ初期化</h3><p>起床時刻、予定、タスク、アラーム、履歴を削除します。</p><button class="danger-button full-width" id="reset-data" type="button">すべて初期化</button></section>
+        <section class="settings-section"><h3>データ初期化</h3><p>起床時刻、予定、タスク、アラーム、日記、履歴を削除します。</p><button class="danger-button full-width" id="reset-data" type="button">すべて初期化</button></section>
       </div>
     </dialog>
 
-    <template id="schedule-row-template"><div class="schedule-editor-row"><label class="field"><span>開始</span><span class="time-selects compact-time start-time"><select class="hours-select" aria-label="開始時間"></select><span>:</span><select class="minutes-select" aria-label="開始分"></select></span></label><span class="range-arrow">→</span><label class="field"><span>終了</span><span class="time-selects compact-time end-time"><select class="hours-select" aria-label="終了時間"></select><span>:</span><select class="minutes-select" aria-label="終了分"></select></span></label><label class="field label-field"><span>内容</span><input class="label-input" type="text" maxlength="40" placeholder="予定の内容"></label><button class="delete-button" type="button">削除</button></div></template>
+    <template id="schedule-row-template"><div class="schedule-editor-row"><label class="field"><span>開始</span><output class="start-display">00:00</output></label><span class="range-arrow">→</span><label class="field"><span>終了</span><span class="time-selects compact-time end-time"><select class="hours-select" aria-label="終了時間"></select><span>:</span><select class="minutes-select" aria-label="終了分"></select></span></label><label class="field label-field"><span>内容</span><input class="label-input" type="text" maxlength="40" placeholder="予定の内容"></label><div class="schedule-row-actions"><button class="insert-button" type="button">＋ 前に挿入</button><button class="delete-button" type="button">削除</button></div></div></template>
     <script src="./app.js"></script>
   </body>
 </html>

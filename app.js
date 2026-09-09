@@ -34,6 +34,7 @@ const elements = {
   alarmList: $("#alarm-list"), alarmEmpty: $("#alarm-empty"), testAlarm: $("#test-alarm"), alarmToast: $("#alarm-toast"), alarmToastLabel: $("#alarm-toast-label"), stopAlarm: $("#stop-alarm"),
   openSettings: $("#open-settings"), settingsDialog: $("#settings-dialog"), wakeTimeInput: $("#wake-time-input"), wakeDateNote: $("#wake-date-note"),
   saveWakeTime: $("#save-wake-time"), adjustButtons: document.querySelectorAll("[data-adjust]"), endDayButton: $("#end-day-button"),
+  journalDialog: $("#journal-dialog"), journalForm: $("#journal-form"), journalText: $("#journal-text"), journalFormError: $("#journal-form-error"),
   scheduleEditor: $("#schedule-editor"), scheduleRowTemplate: $("#schedule-row-template"), addSchedule: $("#add-schedule"), saveSchedule: $("#save-schedule"), scheduleErrors: $("#schedule-errors"),
   syncStatus: $("#sync-status"), syncDescription: $("#sync-description"), syncDetail: $("#sync-detail"), createSyncRoom: $("#create-sync-room"), copySyncLink: $("#copy-sync-link"), leaveSyncRoom: $("#leave-sync-room"), resetData: $("#reset-data"),
 };
@@ -55,7 +56,7 @@ let syncReconnectTimer = null;
 let syncReconnectDelay = 1000;
 
 function defaultState() {
-  return { wakeTimestamp: null, schedule: DEFAULT_SCHEDULE.map((item) => ({ ...item })), tasks: [], alarms: [], taskHistory: [] };
+  return { wakeTimestamp: null, schedule: DEFAULT_SCHEDULE.map((item) => ({ ...item })), tasks: [], alarms: [], taskHistory: [], journals: [] };
 }
 
 function loadState() {
@@ -87,7 +88,8 @@ function isValidSchedule(items) {
 
 function isValidState(candidate) {
   return candidate && (candidate.wakeTimestamp === null || (Number.isFinite(candidate.wakeTimestamp) && candidate.wakeTimestamp > 0))
-    && isValidSchedule(candidate.schedule) && Array.isArray(candidate.tasks) && Array.isArray(candidate.alarms) && Array.isArray(candidate.taskHistory);
+    && isValidSchedule(candidate.schedule) && Array.isArray(candidate.tasks) && Array.isArray(candidate.alarms) && Array.isArray(candidate.taskHistory)
+    && (candidate.journals === undefined || Array.isArray(candidate.journals));
 }
 
 function normalizeState(candidate) {
@@ -97,6 +99,7 @@ function normalizeState(candidate) {
     tasks: candidate.tasks.filter((item) => item && typeof item.id === "string" && typeof item.name === "string").slice(0, 500),
     alarms: candidate.alarms.filter((item) => item && typeof item.id === "string" && typeof item.name === "string").slice(0, 200),
     taskHistory: candidate.taskHistory.filter((item) => item && typeof item.lifeDate === "string").slice(-10000),
+    journals: (candidate.journals || []).filter((item) => item && typeof item.lifeDate === "string" && typeof item.text === "string").slice(-1000),
   };
 }
 
@@ -139,13 +142,13 @@ function initializeTimeSelect(group, selectedMinutes = 0) {
   const hoursSelect = group.querySelector(".hours-select");
   const minutesSelect = group.querySelector(".minutes-select");
   hoursSelect.replaceChildren(...Array.from({ length: 25 }, (_, hour) => new Option(pad(hour), String(hour))));
-  minutesSelect.replaceChildren(...Array.from({ length: 12 }, (_, index) => new Option(pad(index * 5), String(index * 5))));
+  minutesSelect.replaceChildren(...Array.from({ length: 60 }, (_, minute) => new Option(pad(minute), String(minute))));
   setTimeSelect(group, selectedMinutes);
 }
 function setTimeSelect(group, totalMinutes) {
-  const rounded = Math.min(24 * 60 + 55, Math.max(0, Math.round(Number(totalMinutes || 0) / 5) * 5));
-  group.querySelector(".hours-select").value = String(Math.floor(rounded / 60));
-  group.querySelector(".minutes-select").value = String(rounded % 60);
+  const normalized = Math.min(24 * 60 + 59, Math.max(0, Math.round(Number(totalMinutes || 0))));
+  group.querySelector(".hours-select").value = String(Math.floor(normalized / 60));
+  group.querySelector(".minutes-select").value = String(normalized % 60);
 }
 function readTimeSelect(group) {
   return Number(group.querySelector(".hours-select").value) * 60 + Number(group.querySelector(".minutes-select").value);
@@ -259,7 +262,10 @@ function taskDeadlineText(task, lifeKey) {
 
 function visibleTasks() {
   const lifeKey = currentLifeDate();
-  return state.tasks.filter((task) => taskAppliesOn(task, lifeKey)).sort((a, b) => (taskDeadline(a, lifeKey) ?? Infinity) - (taskDeadline(b, lifeKey) ?? Infinity));
+  return state.tasks.filter((task) => taskAppliesOn(task, lifeKey)).sort((a, b) => {
+    const deadlineDifference = (taskDeadline(a, lifeKey) ?? Infinity) - (taskDeadline(b, lifeKey) ?? Infinity);
+    return deadlineDifference || (a.createdAt || 0) - (b.createdAt || 0);
+  });
 }
 
 function renderTasks(now = Date.now()) {
@@ -470,15 +476,21 @@ function snapshotTasks(lifeKey = currentLifeDate()) {
 
 function exportCsv() {
   const currentKey = currentLifeDate();
-  const currentRows = state.tasks.filter((task) => taskAppliesOn(task, currentKey)).map((task) => {
+  const currentRows = (state.wakeTimestamp ? state.tasks.filter((task) => taskAppliesOn(task, currentKey)) : []).map((task) => {
     const completedAt = task.completions?.[currentKey] || null;
     return { lifeDate: currentKey, taskId: task.id, taskName: task.name, deadline: taskDeadline(task, currentKey), completedAt, status: completedAt ? "達成" : "未達", recurrence: recurrenceLabel(task) };
   });
   const currentIds = new Set(currentRows.map((row) => row.taskId));
   const archived = state.taskHistory.filter((row) => row.lifeDate !== currentKey || !currentIds.has(row.taskId));
-  const rows = [...archived, ...currentRows].sort((a, b) => a.lifeDate.localeCompare(b.lifeDate) || String(a.deadline || "").localeCompare(String(b.deadline || "")));
+  const rows = [...archived, ...currentRows];
+  const datesWithTasks = new Set(rows.map((row) => row.lifeDate));
+  state.journals.forEach((journal) => {
+    if (!datesWithTasks.has(journal.lifeDate)) rows.push({ lifeDate: journal.lifeDate, taskName: "", deadline: null, completedAt: null, status: "", recurrence: "" });
+  });
+  rows.sort((a, b) => a.lifeDate.localeCompare(b.lifeDate) || String(a.deadline || "").localeCompare(String(b.deadline || "")));
+  const journalByDate = new Map(state.journals.map((journal) => [journal.lifeDate, journal.text]));
   const escape = (value) => `"${String(value ?? "").replaceAll('"', '""')}"`;
-  const lines = [["起床日", "タスク名", "期限", "結果", "達成時刻", "繰り返し"], ...rows.map((row) => [row.lifeDate, row.taskName, row.deadline ? new Date(row.deadline).toLocaleString("ja-JP") : "", row.status, row.completedAt ? new Date(row.completedAt).toLocaleString("ja-JP") : "", row.recurrence])];
+  const lines = [["起床日", "タスク名", "期限", "結果", "達成時刻", "繰り返し", "日記"], ...rows.map((row) => [row.lifeDate, row.taskName, row.deadline ? new Date(row.deadline).toLocaleString("ja-JP") : "", row.status, row.completedAt ? new Date(row.completedAt).toLocaleString("ja-JP") : "", row.recurrence, journalByDate.get(row.lifeDate) || ""])];
   const blob = new Blob(["\uFEFF", lines.map((line) => line.map(escape).join(",")).join("\r\n")], { type: "text/csv;charset=utf-8" });
   const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = `awake-tasks-${currentKey}.csv`; link.click(); URL.revokeObjectURL(link.href);
 }
@@ -488,8 +500,27 @@ function startTimer() {
 }
 
 function endDay() {
-  if (!state.wakeTimestamp || !confirm("今日のタスクを記録して、タイマーを終了しますか？")) return;
-  snapshotTasks(currentLifeDate()); state.wakeTimestamp = null; saveState(); syncWakeControls(); renderAll(); elements.settingsDialog.close();
+  if (!state.wakeTimestamp) return;
+  const existing = state.journals.find((journal) => journal.lifeDate === currentLifeDate());
+  elements.journalText.value = existing?.text || "";
+  showError(elements.journalFormError, "");
+  elements.settingsDialog.close();
+  openDialog(elements.journalDialog);
+  elements.journalText.focus();
+}
+
+function saveJournalAndEnd(event) {
+  event.preventDefault();
+  if (!state.wakeTimestamp) { elements.journalDialog.close(); return; }
+  const text = elements.journalText.value.trim();
+  if (!text) { showError(elements.journalFormError, "日記を1文字以上入力してください。"); return; }
+  const lifeDate = currentLifeDate();
+  snapshotTasks(lifeDate);
+  const journal = { lifeDate, text, savedAt: Date.now(), wakeTimestamp: state.wakeTimestamp, endTimestamp: Date.now() };
+  const existingIndex = state.journals.findIndex((item) => item.lifeDate === lifeDate);
+  if (existingIndex >= 0) state.journals[existingIndex] = journal; else state.journals.push(journal);
+  state.wakeTimestamp = null;
+  saveState(); syncWakeControls(); renderAll(); elements.journalDialog.close();
 }
 
 function syncWakeControls() {
@@ -517,20 +548,47 @@ function adjustWakeTime(minutes) {
   state.wakeTimestamp = next; saveState(); syncWakeControls(); renderAll();
 }
 
-function appendScheduleEditorRow(item = { start: 0, end: 60, label: "" }) {
+function appendScheduleEditorRow(item = { end: 60, label: "" }, beforeRow = null) {
   const row = elements.scheduleRowTemplate.content.firstElementChild.cloneNode(true);
-  initializeTimeSelect(row.querySelector(".start-time"), item.start); initializeTimeSelect(row.querySelector(".end-time"), item.end); row.querySelector(".label-input").value = item.label;
-  row.querySelector(".delete-button").addEventListener("click", () => row.remove()); elements.scheduleEditor.append(row);
+  initializeTimeSelect(row.querySelector(".end-time"), item.end); row.querySelector(".label-input").value = item.label;
+  row.querySelector(".end-time").addEventListener("change", refreshScheduleStartDisplays);
+  row.querySelector(".delete-button").addEventListener("click", () => { row.remove(); refreshScheduleStartDisplays(); });
+  row.querySelector(".insert-button").addEventListener("click", () => insertScheduleBefore(row));
+  elements.scheduleEditor.insertBefore(row, beforeRow);
+  refreshScheduleStartDisplays();
+  return row;
 }
-function renderScheduleEditor() { elements.scheduleEditor.replaceChildren(); state.schedule.forEach(appendScheduleEditorRow); }
+function refreshScheduleStartDisplays() {
+  let start = 0;
+  elements.scheduleEditor.querySelectorAll(".schedule-editor-row").forEach((row) => {
+    row.querySelector(".start-display").textContent = formatDuration(start);
+    start = readTimeSelect(row.querySelector(".end-time"));
+  });
+}
+function insertScheduleBefore(row) {
+  const rows = [...elements.scheduleEditor.querySelectorAll(".schedule-editor-row")];
+  const index = rows.indexOf(row);
+  const previousEnd = index > 0 ? readTimeSelect(rows[index - 1].querySelector(".end-time")) : 0;
+  const currentEnd = readTimeSelect(row.querySelector(".end-time"));
+  if (currentEnd - previousEnd < 2) { alert("この位置には挿入できる時間がありません。前後の終了時刻を調整してください。"); return; }
+  appendScheduleEditorRow({ end: Math.floor((previousEnd + currentEnd) / 2), label: "" }, row);
+}
+function addScheduleAtEnd() {
+  const rows = [...elements.scheduleEditor.querySelectorAll(".schedule-editor-row")];
+  const lastEnd = rows.length ? readTimeSelect(rows[rows.length - 1].querySelector(".end-time")) : 0;
+  if (lastEnd >= 1499) { alert("24:59より後には予定を追加できません。"); return; }
+  appendScheduleEditorRow({ end: Math.min(1499, lastEnd + 60), label: "" });
+}
+function renderScheduleEditor() { elements.scheduleEditor.replaceChildren(); state.schedule.forEach((item) => appendScheduleEditorRow(item)); }
 function readScheduleEditor() {
+  let previousEnd = 0;
   const errors = []; const items = [...elements.scheduleEditor.querySelectorAll(".schedule-editor-row")].map((row, index) => {
-    const start = readTimeSelect(row.querySelector(".start-time")); const end = readTimeSelect(row.querySelector(".end-time")); const label = row.querySelector(".label-input").value.trim();
+    const start = previousEnd; const end = readTimeSelect(row.querySelector(".end-time")); const label = row.querySelector(".label-input").value.trim();
     if (end <= start) errors.push(`${index + 1}行目：終了は開始より後にしてください。`);
     if (!label) errors.push(`${index + 1}行目：内容を入力してください。`);
+    previousEnd = end;
     return { start, end, label };
-  }).sort((a, b) => a.start - b.start);
-  items.forEach((item, index) => { if (index && items[index - 1].end > item.start) errors.push(`「${items[index - 1].label}」と「${item.label}」の時間が重なっています。`); });
+  });
   return { items, errors };
 }
 function saveSchedule() {
@@ -540,7 +598,7 @@ function saveSchedule() {
 }
 
 function resetData() {
-  if (!confirm("すべての起床時刻、予定、タスク、アラーム、履歴を削除しますか？")) return;
+  if (!confirm("すべての起床時刻、予定、タスク、アラーム、日記、履歴を削除しますか？")) return;
   state = defaultState(); saveState(); renderScheduleEditor(); syncWakeControls(); renderAll(); elements.settingsDialog.close();
 }
 
@@ -648,11 +706,9 @@ elements.openSettings.addEventListener("click", () => { renderScheduleEditor(); 
 document.querySelectorAll(".dialog-close").forEach((button) => button.addEventListener("click", () => button.closest("dialog").close()));
 document.querySelectorAll('input[name$="-time-mode"], input[name$="-recurrence"]').forEach((input) => input.addEventListener("change", () => updateTimeForm(input.name.startsWith("task") ? "task" : "alarm")));
 elements.exportTasks.addEventListener("click", exportCsv); elements.saveWakeTime.addEventListener("click", saveWakeTime); elements.endDayButton.addEventListener("click", endDay);
+elements.journalForm.addEventListener("submit", saveJournalAndEnd);
 elements.adjustButtons.forEach((button) => button.addEventListener("click", () => adjustWakeTime(Number(button.dataset.adjust))));
-elements.addSchedule.addEventListener("click", () => {
-  const lastEnd = state.schedule.length ? state.schedule[state.schedule.length - 1].end : 0;
-  appendScheduleEditorRow({ start: lastEnd, end: lastEnd + 60, label: "" });
-});
+elements.addSchedule.addEventListener("click", addScheduleAtEnd);
 elements.saveSchedule.addEventListener("click", saveSchedule); elements.resetData.addEventListener("click", resetData);
 elements.createSyncRoom.addEventListener("click", createSyncRoom); elements.copySyncLink.addEventListener("click", copySyncLink); elements.leaveSyncRoom.addEventListener("click", leaveSyncRoom);
 window.addEventListener("hashchange", () => { const next = readSyncSecretFromLocation(); if (next === syncSecret) return; stopSyncSubscription(); syncSecret = next; syncVersion = 0; void initializeSync(); });

@@ -46,17 +46,19 @@ function isValidScheduleItem(item) {
 
 function normalizeState(candidate) {
   const validWake = candidate?.wakeTimestamp === null || (Number.isFinite(candidate?.wakeTimestamp) && candidate.wakeTimestamp > 0);
-  if (!candidate || !validWake || !Array.isArray(candidate.schedule) || !Array.isArray(candidate.tasks) || !Array.isArray(candidate.alarms) || !Array.isArray(candidate.taskHistory)) return null;
-  if (candidate.schedule.length > 100 || candidate.tasks.length > 500 || candidate.alarms.length > 200 || candidate.taskHistory.length > 10000) return null;
+  if (!candidate || !validWake || !Array.isArray(candidate.schedule) || !Array.isArray(candidate.tasks) || !Array.isArray(candidate.alarms) || !Array.isArray(candidate.taskHistory) || (candidate.journals !== undefined && !Array.isArray(candidate.journals))) return null;
+  const journals = candidate.journals || [];
+  if (candidate.schedule.length > 100 || candidate.tasks.length > 500 || candidate.alarms.length > 200 || candidate.taskHistory.length > 10000 || journals.length > 1000) return null;
 
   const schedule = candidate.schedule.map((item) => ({ start: item.start, end: item.end, label: item.label?.trim() })).sort((a, b) => a.start - b.start);
   const validSchedule = schedule.every((item, index) => isValidScheduleItem(item) && (!schedule[index - 1] || schedule[index - 1].end <= item.start));
   const validTasks = candidate.tasks.every((item) => item && typeof item.id === "string" && item.id.length <= 100 && typeof item.name === "string" && item.name.length <= 80);
   const validAlarms = candidate.alarms.every((item) => item && typeof item.id === "string" && item.id.length <= 100 && typeof item.name === "string" && item.name.length <= 80);
   const validHistory = candidate.taskHistory.every((item) => item && typeof item.lifeDate === "string" && typeof item.taskName === "string");
-  if (!validSchedule || !validTasks || !validAlarms || !validHistory) return null;
+  const validJournals = journals.every((item) => item && typeof item.lifeDate === "string" && typeof item.text === "string" && item.text.length >= 1 && item.text.length <= 10000);
+  if (!validSchedule || !validTasks || !validAlarms || !validHistory || !validJournals) return null;
 
-  return JSON.parse(JSON.stringify({ wakeTimestamp: candidate.wakeTimestamp, schedule, tasks: candidate.tasks, alarms: candidate.alarms, taskHistory: candidate.taskHistory }));
+  return JSON.parse(JSON.stringify({ wakeTimestamp: candidate.wakeTimestamp, schedule, tasks: candidate.tasks, alarms: candidate.alarms, taskHistory: candidate.taskHistory, journals }));
 }
 
 export default async function handler(request, response) {
