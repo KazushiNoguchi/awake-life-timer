@@ -88,6 +88,35 @@ input:focus-visible {
   font-variant-numeric: tabular-nums;
 }
 
+.hero-status {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.sync-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 2px 8px;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 99px;
+  font-size: 0.68rem;
+  font-weight: 650;
+}
+
+.sync-status.is-connected {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.sync-status.is-error {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger), transparent 35%);
+}
+
 .inactive-view {
   padding: 80px 0 32px;
 }
@@ -452,6 +481,17 @@ button:disabled {
 
 .reset-section p {
   margin-bottom: 0;
+}
+
+.sync-actions .full-width:first-child {
+  margin-top: 0;
+}
+
+.sync-detail {
+  margin: 14px 0 0 !important;
+  padding: 11px 12px;
+  border-radius: 7px;
+  background: var(--background);
 }
 
 @media (max-width: 580px) {

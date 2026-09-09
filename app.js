@@ -6,6 +6,10 @@ const STORAGE_KEYS = {
   settings: "settings",
 };
 
+const SYNC_HASH_PREFIX = "#sync=";
+const SYNC_POLL_INTERVAL = 2000;
+const SYNC_SECRET_PATTERN = /^[A-Za-z0-9_-]{43}$/;
+
 const DEFAULT_SCHEDULE = [
   { start: 0, end: 30, label: "起床・準備" },
   { start: 30, end: 90, label: "朝食・家事" },
@@ -44,12 +48,23 @@ const elements = {
   addSchedule: document.querySelector("#add-schedule"),
   saveSchedule: document.querySelector("#save-schedule"),
   scheduleErrors: document.querySelector("#schedule-errors"),
+  syncStatus: document.querySelector("#sync-status"),
+  syncDescription: document.querySelector("#sync-description"),
+  syncDetail: document.querySelector("#sync-detail"),
+  createSyncRoom: document.querySelector("#create-sync-room"),
+  copySyncLink: document.querySelector("#copy-sync-link"),
+  leaveSyncRoom: document.querySelector("#leave-sync-room"),
   resetData: document.querySelector("#reset-data"),
 };
 
 let wakeTimestamp = loadWakeTimestamp();
 let schedule = loadSchedule();
 let lastRenderedSecond = -1;
+let syncSecret = readSyncSecretFromLocation();
+let syncVersion = 0;
+let syncDirty = false;
+let syncRequestInFlight = false;
+let localMutationVersion = 0;
 
 function cloneDefaultSchedule() {
   return DEFAULT_SCHEDULE.map((item) => ({ ...item }));
@@ -101,6 +116,170 @@ function ensureSettings() {
     console.warn("保存された設定を読み込めませんでした。", error);
   }
   localStorage.setItem(STORAGE_KEYS.settings, JSON.stringify({ version: 1 }));
+}
+
+function readSyncSecretFromLocation() {
+  if (!window.location.hash.startsWith(SYNC_HASH_PREFIX)) return null;
+  const candidate = window.location.hash.slice(SYNC_HASH_PREFIX.length);
+  return SYNC_SECRET_PATTERN.test(candidate) ? candidate : null;
+}
+
+function createSyncSecret() {
+  const bytes = new Uint8Array(32);
+  window.crypto.getRandomValues(bytes);
+  const binary = Array.from(bytes, (byte) => String.fromCharCode(byte)).join("");
+  return window.btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+function getLocalSyncState() {
+  return {
+    wakeTimestamp,
+    schedule: schedule.map((item) => ({ ...item })),
+  };
+}
+
+function persistLocalState() {
+  if (wakeTimestamp === null) localStorage.removeItem(STORAGE_KEYS.wakeTimestamp);
+  else localStorage.setItem(STORAGE_KEYS.wakeTimestamp, String(wakeTimestamp));
+  localStorage.setItem(STORAGE_KEYS.schedule, JSON.stringify(schedule));
+}
+
+function setSyncStatus(kind, detail) {
+  const labels = {
+    local: "この端末のみ",
+    connecting: "同期中…",
+    connected: "端末間同期中",
+    error: "同期エラー",
+  };
+  elements.syncStatus.textContent = labels[kind];
+  elements.syncStatus.classList.toggle("is-connected", kind === "connected");
+  elements.syncStatus.classList.toggle("is-error", kind === "error");
+  elements.syncDetail.textContent = detail;
+}
+
+function renderSyncControls() {
+  const active = Boolean(syncSecret);
+  elements.createSyncRoom.hidden = active;
+  elements.copySyncLink.hidden = !active;
+  elements.leaveSyncRoom.hidden = !active;
+  elements.syncDescription.textContent = active
+    ? "このページの共有リンクを開いた端末と、起床時刻・終了状態・予定を同期します。"
+    : "共有ルームを作ると、同じリンクを開いた端末へ変更が反映されます。";
+  if (!active) setSyncStatus("local", "現在、この端末内だけに保存されています。");
+}
+
+function markStateChanged() {
+  persistLocalState();
+  localMutationVersion += 1;
+  if (!syncSecret) return;
+  syncDirty = true;
+  void synchronizeState();
+}
+
+function isValidRemoteState(state) {
+  const validWakeTimestamp = state?.wakeTimestamp === null
+    || (Number.isFinite(state?.wakeTimestamp) && state.wakeTimestamp > 0);
+  return validWakeTimestamp && isValidSchedule(state?.schedule);
+}
+
+function applyRemoteState(state) {
+  if (!isValidRemoteState(state)) throw new Error("同期データの形式が正しくありません。");
+  wakeTimestamp = state.wakeTimestamp;
+  schedule = state.schedule.map((item) => ({ ...item })).sort((a, b) => a.start - b.start);
+  persistLocalState();
+  syncWakeControls();
+  if (elements.settingsDialog.open) renderScheduleEditor();
+  lastRenderedSecond = -1;
+  renderTimer();
+}
+
+async function requestSync(method, body) {
+  const response = await window.fetch("/api/state", {
+    method,
+    headers: {
+      Authorization: `Bearer ${syncSecret}`,
+      ...(body ? { "Content-Type": "application/json" } : {}),
+    },
+    body: body ? JSON.stringify(body) : undefined,
+    cache: "no-store",
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const error = new Error(result.message || "同期サーバーに接続できませんでした。");
+    error.status = response.status;
+    throw error;
+  }
+  return result;
+}
+
+async function pushSyncState() {
+  const mutationAtStart = localMutationVersion;
+  const result = await requestSync("PUT", { state: getLocalSyncState() });
+  syncVersion = result.version;
+  if (mutationAtStart === localMutationVersion) syncDirty = false;
+  setSyncStatus("connected", "変更を同期しました。共有リンクを別の端末で開いてください。");
+}
+
+async function pullSyncState() {
+  const result = await requestSync("GET");
+  if (result.version > syncVersion) {
+    applyRemoteState(result.state);
+    syncVersion = result.version;
+  }
+  setSyncStatus("connected", "他の端末と同期されています。変更は約2秒以内に反映されます。");
+}
+
+async function synchronizeState() {
+  if (!syncSecret || syncRequestInFlight) return;
+  syncRequestInFlight = true;
+  try {
+    if (syncDirty) await pushSyncState();
+    else await pullSyncState();
+  } catch (error) {
+    if (error.status === 404) {
+      setSyncStatus("error", "共有ルームが見つかりません。リンクが正しいか確認してください。");
+    } else if (error.status === 503) {
+      setSyncStatus("error", "同期用ストレージがまだ設定されていません。Vercelの設定を確認してください。");
+    } else {
+      setSyncStatus("error", "接続できません。ローカルで継続し、回復後に再同期します。");
+    }
+  } finally {
+    syncRequestInFlight = false;
+  }
+}
+
+async function createSyncRoom() {
+  syncSecret = createSyncSecret();
+  window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}${SYNC_HASH_PREFIX}${syncSecret}`);
+  renderSyncControls();
+  setSyncStatus("connecting", "共有ルームを作成しています…");
+  syncDirty = true;
+  await synchronizeState();
+}
+
+async function copySyncLink() {
+  try {
+    await navigator.clipboard.writeText(window.location.href);
+    setSyncStatus("connected", "共有リンクをコピーしました。別の端末で開いてください。");
+  } catch (error) {
+    window.prompt("このリンクをコピーしてください。", window.location.href);
+  }
+}
+
+function leaveSyncRoom() {
+  if (!window.confirm("この端末の同期を解除しますか？ 端末内のデータは残ります。")) return;
+  syncSecret = null;
+  syncVersion = 0;
+  syncDirty = false;
+  window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
+  renderSyncControls();
+}
+
+async function initializeSync() {
+  renderSyncControls();
+  if (!syncSecret) return;
+  setSyncStatus("connecting", "共有データを読み込んでいます…");
+  await synchronizeState();
 }
 
 function getElapsedMilliseconds(now = Date.now()) {
@@ -227,7 +406,7 @@ function renderSchedule(elapsedMinutes = wakeTimestamp ? getElapsedMinutes() : n
 
 function startTimer() {
   wakeTimestamp = Date.now();
-  localStorage.setItem(STORAGE_KEYS.wakeTimestamp, String(wakeTimestamp));
+  markStateChanged();
   syncWakeControls();
   lastRenderedSecond = -1;
   renderTimer();
@@ -237,7 +416,7 @@ function endDay() {
   if (!wakeTimestamp) return;
   if (!window.confirm("今日のタイマーを終了しますか？")) return;
   wakeTimestamp = null;
-  localStorage.removeItem(STORAGE_KEYS.wakeTimestamp);
+  markStateChanged();
   syncWakeControls();
   lastRenderedSecond = -1;
   renderTimer();
@@ -283,7 +462,7 @@ function saveWakeTime() {
     return;
   }
   wakeTimestamp = changed.getTime();
-  localStorage.setItem(STORAGE_KEYS.wakeTimestamp, String(wakeTimestamp));
+  markStateChanged();
   syncWakeControls();
   lastRenderedSecond = -1;
   renderTimer();
@@ -297,7 +476,7 @@ function adjustWakeTime(minutes) {
     return;
   }
   wakeTimestamp = changed;
-  localStorage.setItem(STORAGE_KEYS.wakeTimestamp, String(wakeTimestamp));
+  markStateChanged();
   syncWakeControls();
   lastRenderedSecond = -1;
   renderTimer();
@@ -365,7 +544,7 @@ function saveSchedule() {
     return;
   }
   schedule = items;
-  localStorage.setItem(STORAGE_KEYS.schedule, JSON.stringify(schedule));
+  markStateChanged();
   hideScheduleErrors();
   renderScheduleEditor();
   lastRenderedSecond = -1;
@@ -388,7 +567,7 @@ function resetData() {
   Object.values(STORAGE_KEYS).forEach((key) => localStorage.removeItem(key));
   wakeTimestamp = null;
   schedule = cloneDefaultSchedule();
-  localStorage.setItem(STORAGE_KEYS.schedule, JSON.stringify(schedule));
+  markStateChanged();
   ensureSettings();
   syncWakeControls();
   renderScheduleEditor();
@@ -422,6 +601,9 @@ elements.adjustButtons.forEach((button) => {
 elements.endDayButton.addEventListener("click", endDay);
 elements.addSchedule.addEventListener("click", addScheduleRow);
 elements.saveSchedule.addEventListener("click", saveSchedule);
+elements.createSyncRoom.addEventListener("click", createSyncRoom);
+elements.copySyncLink.addEventListener("click", copySyncLink);
+elements.leaveSyncRoom.addEventListener("click", leaveSyncRoom);
 elements.resetData.addEventListener("click", resetData);
 elements.settingsDialog.addEventListener("click", (event) => {
   if (event.target === elements.settingsDialog) elements.settingsDialog.close();
@@ -430,6 +612,7 @@ document.addEventListener("visibilitychange", () => {
   if (!document.hidden) {
     lastRenderedSecond = -1;
     renderTimer();
+    void synchronizeState();
   }
 });
 
@@ -437,4 +620,6 @@ ensureSettings();
 syncWakeControls();
 renderScheduleEditor();
 renderTimer();
+void initializeSync();
+window.setInterval(synchronizeState, SYNC_POLL_INTERVAL);
 window.requestAnimationFrame(tick);

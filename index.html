@@ -13,7 +13,10 @@
       <section class="hero" aria-labelledby="awake-heading">
         <div class="hero-topline">
           <p class="eyebrow" id="awake-heading">AWAKE</p>
-          <time class="clock-time" id="clock-time" aria-label="現在時刻">--:--</time>
+          <div class="hero-status">
+            <span class="sync-status" id="sync-status">この端末のみ</span>
+            <time class="clock-time" id="clock-time" aria-label="現在時刻">--:--</time>
+          </div>
         </div>
 
         <div id="inactive-view" class="inactive-view" hidden>
@@ -95,6 +98,19 @@
           <div id="schedule-errors" class="error-summary" role="alert" hidden></div>
           <div class="schedule-editor" id="schedule-editor"></div>
           <button class="primary-button full-width" id="save-schedule" type="button">スケジュールを保存</button>
+        </section>
+
+        <section class="settings-section" aria-labelledby="sync-settings-title">
+          <div class="settings-heading">
+            <h3 id="sync-settings-title">端末間同期</h3>
+            <p id="sync-description">共有ルームを作ると、同じリンクを開いた端末へ変更が反映されます。</p>
+          </div>
+          <div class="sync-actions">
+            <button class="primary-button full-width" id="create-sync-room" type="button">同期を開始</button>
+            <button class="secondary-button full-width" id="copy-sync-link" type="button" hidden>共有リンクをコピー</button>
+            <button class="danger-outline-button full-width" id="leave-sync-room" type="button" hidden>この端末の同期を解除</button>
+          </div>
+          <p class="sync-detail" id="sync-detail" aria-live="polite">現在、この端末内だけに保存されています。</p>
         </section>
 
         <section class="settings-section reset-section">

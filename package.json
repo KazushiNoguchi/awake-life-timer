@@ -1,0 +1,9 @@
+{
+  "name": "awake-life-timer",
+  "version": "1.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  }
+}
