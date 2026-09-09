@@ -135,15 +135,23 @@ function formatClock(timestamp, seconds = false) {
 function formatDateTime(timestamp) {
   return new Intl.DateTimeFormat("ja-JP", { month: "numeric", day: "numeric", weekday: "short", hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(timestamp));
 }
-function parseDuration(value) {
-  const match = String(value).trim().match(/^(\d{1,3})(?::([0-5]?\d))?$/);
-  if (!match) return null;
-  return Number(match[1]) * 60 + Number(match[2] || 0);
+function initializeTimeSelect(group, selectedMinutes = 0) {
+  const hoursSelect = group.querySelector(".hours-select");
+  const minutesSelect = group.querySelector(".minutes-select");
+  hoursSelect.replaceChildren(...Array.from({ length: 25 }, (_, hour) => new Option(pad(hour), String(hour))));
+  minutesSelect.replaceChildren(...Array.from({ length: 12 }, (_, index) => new Option(pad(index * 5), String(index * 5))));
+  setTimeSelect(group, selectedMinutes);
 }
-function parseClockMinutes(value) {
-  const match = String(value).match(/^(\d{2}):(\d{2})$/);
-  if (!match) return null;
-  return Number(match[1]) * 60 + Number(match[2]);
+function setTimeSelect(group, totalMinutes) {
+  const rounded = Math.min(24 * 60 + 55, Math.max(0, Math.round(Number(totalMinutes || 0) / 5) * 5));
+  group.querySelector(".hours-select").value = String(Math.floor(rounded / 60));
+  group.querySelector(".minutes-select").value = String(rounded % 60);
+}
+function readTimeSelect(group) {
+  return Number(group.querySelector(".hours-select").value) * 60 + Number(group.querySelector(".minutes-select").value);
+}
+function disableTimeSelect(group, disabled) {
+  group.querySelectorAll("select").forEach((select) => { select.disabled = disabled; });
 }
 function timestampAtClock(baseTimestamp, minutes) {
   const date = new Date(baseTimestamp);
@@ -328,9 +336,8 @@ function createTimedItem(kind) {
   const now = Date.now();
   if (recurrence === "weekly" && weekdays.length === 0) throw new Error("曜日を1つ以上選んでください。");
   if (mode === "awake" && !state.wakeTimestamp) throw new Error("「起床から」を使うには、先にタイマーを開始してください。");
-  const duration = mode === "clock" ? null : parseDuration(elements[`${kind}Duration`].value);
-  const selectedClock = mode === "clock" ? parseClockMinutes(elements[`${kind}Clock`].value) : null;
-  if (mode !== "clock" && (duration === null || duration < 0)) throw new Error("経過時間を「時間:分」で入力してください。");
+  const duration = mode === "clock" ? null : readTimeSelect(elements[`${kind}Duration`]);
+  const selectedClock = mode === "clock" ? readTimeSelect(elements[`${kind}Clock`]) % 1440 : null;
   if (mode === "relative" && duration === 0) throw new Error("現在からの時間は1分以上にしてください。");
   if (mode === "clock" && selectedClock === null) throw new Error("時刻を入力してください。");
 
@@ -357,7 +364,7 @@ function addTask(event) {
     const name = elements.taskName.value.trim();
     if (!name) throw new Error("タスク名を入力してください。");
     const task = { ...createTimedItem("task"), name, completions: {}, notified: {} };
-    state.tasks.push(task); saveState(); renderTasks(); elements.taskDialog.close(); elements.taskForm.reset(); elements.taskDuration.value = "1:00"; updateTimeForm("task"); showError(elements.taskFormError, "");
+    state.tasks.push(task); saveState(); renderTasks(); elements.taskDialog.close(); elements.taskForm.reset(); setTimeSelect(elements.taskDuration, 60); setTimeSelect(elements.taskClock, 540); updateTimeForm("task"); showError(elements.taskFormError, "");
   } catch (error) { showError(elements.taskFormError, error.message); }
 }
 
@@ -366,7 +373,7 @@ function addAlarm(event) {
   try {
     const name = elements.alarmName.value.trim() || "アラーム";
     const alarm = { ...createTimedItem("alarm"), name, enabled: true, triggered: {} };
-    state.alarms.push(alarm); saveState(); renderAlarms(); elements.alarmForm.reset(); elements.alarmName.value = "アラーム"; elements.alarmDuration.value = "0:10"; updateTimeForm("alarm"); showError(elements.alarmFormError, "");
+    state.alarms.push(alarm); saveState(); renderAlarms(); elements.alarmForm.reset(); elements.alarmName.value = "アラーム"; setTimeSelect(elements.alarmDuration, 10); setTimeSelect(elements.alarmClock, 540); updateTimeForm("alarm"); showError(elements.alarmFormError, "");
   } catch (error) { showError(elements.alarmFormError, error.message); }
 }
 
@@ -487,17 +494,18 @@ function endDay() {
 
 function syncWakeControls() {
   const active = Boolean(state.wakeTimestamp);
-  elements.wakeTimeInput.disabled = !active; elements.saveWakeTime.disabled = !active; elements.endDayButton.disabled = !active;
+  disableTimeSelect(elements.wakeTimeInput, !active); elements.saveWakeTime.disabled = !active; elements.endDayButton.disabled = !active;
   elements.adjustButtons.forEach((button) => { button.disabled = !active; });
   if (active) {
-    elements.wakeTimeInput.value = formatClock(state.wakeTimestamp);
+    const wakeDate = new Date(state.wakeTimestamp);
+    setTimeSelect(elements.wakeTimeInput, wakeDate.getHours() * 60 + wakeDate.getMinutes());
     elements.wakeDateNote.textContent = `${new Date(state.wakeTimestamp).toLocaleDateString("ja-JP", { month: "long", day: "numeric", weekday: "short" })}の起床時刻`;
-  } else { elements.wakeTimeInput.value = ""; elements.wakeDateNote.textContent = "タイマー開始後に変更できます。"; }
+  } else { setTimeSelect(elements.wakeTimeInput, 0); elements.wakeDateNote.textContent = "タイマー開始後に変更できます。"; }
 }
 
 function saveWakeTime() {
-  if (!state.wakeTimestamp || !elements.wakeTimeInput.value) return;
-  const [hours, minutes] = elements.wakeTimeInput.value.split(":").map(Number); const next = new Date(state.wakeTimestamp); next.setHours(hours, minutes, 0, 0);
+  if (!state.wakeTimestamp) return;
+  const selectedMinutes = readTimeSelect(elements.wakeTimeInput); const next = new Date(state.wakeTimestamp); next.setHours(Math.floor(selectedMinutes / 60), selectedMinutes % 60, 0, 0);
   if (next.getTime() > Date.now()) { alert("起床時刻を未来には設定できません。"); return; }
   state.wakeTimestamp = next.getTime(); saveState(); syncWakeControls(); renderAll();
 }
@@ -511,15 +519,14 @@ function adjustWakeTime(minutes) {
 
 function appendScheduleEditorRow(item = { start: 0, end: 60, label: "" }) {
   const row = elements.scheduleRowTemplate.content.firstElementChild.cloneNode(true);
-  row.querySelector(".start-input").value = formatDuration(item.start); row.querySelector(".end-input").value = formatDuration(item.end); row.querySelector(".label-input").value = item.label;
+  initializeTimeSelect(row.querySelector(".start-time"), item.start); initializeTimeSelect(row.querySelector(".end-time"), item.end); row.querySelector(".label-input").value = item.label;
   row.querySelector(".delete-button").addEventListener("click", () => row.remove()); elements.scheduleEditor.append(row);
 }
 function renderScheduleEditor() { elements.scheduleEditor.replaceChildren(); state.schedule.forEach(appendScheduleEditorRow); }
 function readScheduleEditor() {
   const errors = []; const items = [...elements.scheduleEditor.querySelectorAll(".schedule-editor-row")].map((row, index) => {
-    const start = parseDuration(row.querySelector(".start-input").value); const end = parseDuration(row.querySelector(".end-input").value); const label = row.querySelector(".label-input").value.trim();
-    if (start === null || end === null) errors.push(`${index + 1}行目：時間は「時間:分」で入力してください。`);
-    else if (end <= start) errors.push(`${index + 1}行目：終了は開始より後にしてください。`);
+    const start = readTimeSelect(row.querySelector(".start-time")); const end = readTimeSelect(row.querySelector(".end-time")); const label = row.querySelector(".label-input").value.trim();
+    if (end <= start) errors.push(`${index + 1}行目：終了は開始より後にしてください。`);
     if (!label) errors.push(`${index + 1}行目：内容を入力してください。`);
     return { start, end, label };
   }).sort((a, b) => a.start - b.start);
@@ -652,5 +659,8 @@ window.addEventListener("hashchange", () => { const next = readSyncSecretFromLoc
 window.addEventListener("storage", (event) => { if (event.key !== STORAGE_KEY || syncSecret) return; state = loadState(); renderScheduleEditor(); syncWakeControls(); renderAll(); });
 document.addEventListener("visibilitychange", () => { if (!document.hidden) { void pullSyncState(); checkAlarms(); renderAll(); } });
 
+initializeTimeSelect(elements.taskDuration, 60); initializeTimeSelect(elements.taskClock, 540);
+initializeTimeSelect(elements.alarmDuration, 10); initializeTimeSelect(elements.alarmClock, 540);
+initializeTimeSelect(elements.wakeTimeInput, 0);
 buildWeekdayOptions(elements.taskWeekdays); buildWeekdayOptions(elements.alarmWeekdays); updateTimeForm("task"); updateTimeForm("alarm");
 renderScheduleEditor(); syncWakeControls(); renderAll(); void initializeSync(); requestAnimationFrame(tick);

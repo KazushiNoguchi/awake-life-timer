@@ -104,8 +104,11 @@ button { border: 0; cursor: pointer; }
 .dialog-body { max-height: calc(100vh - 120px); overflow: auto; padding: 24px; }
 .sub-form { display: grid; gap: 18px; }
 .field { display: grid; gap: 7px; flex: 1; color: var(--muted); font-size: .78rem; font-weight: 700; }
-.field input { width: 100%; min-height: 44px; border: 1px solid var(--line); border-radius: 12px; padding: 9px 12px; background: color-mix(in srgb, var(--panel-solid) 80%, transparent); color: var(--ink); }
+.field input, .field select { width: 100%; min-height: 44px; border: 1px solid var(--line); border-radius: 12px; padding: 9px 12px; background: color-mix(in srgb, var(--panel-solid) 80%, transparent); color: var(--ink); }
 .field small { font-weight: 500; }
+.time-selects { display: grid; grid-template-columns: minmax(72px, 1fr) auto minmax(72px, 1fr) auto; align-items: center; gap: 8px; color: var(--muted); }
+.time-selects select { cursor: pointer; font-variant-numeric: tabular-nums; }
+.compact-time { grid-template-columns: minmax(60px, 1fr) auto minmax(60px, 1fr); gap: 5px; }
 fieldset { min-width: 0; margin: 18px 0; padding: 0; border: 0; }
 legend { margin-bottom: 8px; color: var(--muted); font-size: .78rem; font-weight: 700; }
 .segmented { display: grid; gap: 6px; padding: 5px; border: 1px solid var(--line); border-radius: 14px; background: var(--bg); }
@@ -135,7 +138,7 @@ legend { margin-bottom: 8px; color: var(--muted); font-size: .78rem; font-weight
 .adjust-buttons { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 10px 0; }
 .adjust-buttons button { min-height: 38px; border: 1px solid var(--line); border-radius: 10px; background: transparent; font-size: .77rem; }
 .sync-actions { display: grid; gap: 8px; }
-.schedule-editor-row { display: grid; grid-template-columns: 80px auto 80px minmax(120px, 1fr) auto; align-items: end; gap: 8px; margin-bottom: 10px; }
+.schedule-editor-row { display: grid; grid-template-columns: minmax(138px, .8fr) auto minmax(138px, .8fr) minmax(140px, 1.2fr) auto; align-items: end; gap: 8px; margin-bottom: 10px; }
 .delete-button { min-height: 42px; border-radius: 10px; background: transparent; color: var(--danger); }
 .range-arrow { padding-bottom: 12px; color: var(--muted); }
 
@@ -168,6 +171,7 @@ legend { margin-bottom: 8px; color: var(--muted); font-size: .78rem; font-weight
   .segmented span { padding: 6px 3px; font-size: .68rem; }
   .header-actions { flex-direction: column-reverse; }
   .dialog-body { padding: 18px; }
+  .time-selects { grid-template-columns: minmax(62px, 1fr) auto minmax(62px, 1fr) auto; gap: 5px; }
 }
 
 @media (prefers-color-scheme: dark) {

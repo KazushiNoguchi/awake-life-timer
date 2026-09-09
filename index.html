@@ -103,8 +103,8 @@
             <label><input type="radio" name="task-time-mode" value="relative"><span>現在から</span></label>
             <label><input type="radio" name="task-time-mode" value="clock"><span>通常時刻</span></label>
           </div></fieldset>
-          <label class="field" id="task-duration-field"><span id="task-duration-label">起床からの経過時間</span><input id="task-duration" type="text" inputmode="numeric" value="1:00" placeholder="1:00"><small>「2:30」で2時間30分</small></label>
-          <label class="field" id="task-clock-field" hidden><span>時刻</span><input id="task-clock" type="time" value="09:00"></label>
+          <label class="field" id="task-duration-field"><span id="task-duration-label">起床からの経過時間</span><span class="time-selects" id="task-duration"><select class="hours-select" aria-label="時間"></select><span>時間</span><select class="minutes-select" aria-label="分"></select><span>分</span></span></label>
+          <label class="field" id="task-clock-field" hidden><span>時刻</span><span class="time-selects" id="task-clock"><select class="hours-select" aria-label="時"></select><span>時</span><select class="minutes-select" aria-label="分"></select><span>分</span></span><small>24時台は翌日の0時台として扱います。</small></label>
           <fieldset><legend>繰り返し</legend><div class="segmented three">
             <label><input type="radio" name="task-recurrence" value="once" checked><span>一回だけ</span></label>
             <label><input type="radio" name="task-recurrence" value="daily"><span>毎日</span></label>
@@ -130,8 +130,8 @@
             <label><input type="radio" name="alarm-time-mode" value="awake"><span>起床から</span></label>
             <label><input type="radio" name="alarm-time-mode" value="clock"><span>通常時刻</span></label>
           </div></fieldset>
-          <label class="field" id="alarm-duration-field"><span id="alarm-duration-label">現在からの経過時間</span><input id="alarm-duration" type="text" inputmode="numeric" value="0:10" placeholder="0:10"></label>
-          <label class="field" id="alarm-clock-field" hidden><span>時刻</span><input id="alarm-clock" type="time" value="09:00"></label>
+          <label class="field" id="alarm-duration-field"><span id="alarm-duration-label">現在からの経過時間</span><span class="time-selects" id="alarm-duration"><select class="hours-select" aria-label="時間"></select><span>時間</span><select class="minutes-select" aria-label="分"></select><span>分</span></span></label>
+          <label class="field" id="alarm-clock-field" hidden><span>時刻</span><span class="time-selects" id="alarm-clock"><select class="hours-select" aria-label="時"></select><span>時</span><select class="minutes-select" aria-label="分"></select><span>分</span></span><small>24時台は翌日の0時台として扱います。</small></label>
           <fieldset><legend>繰り返し</legend><div class="segmented three">
             <label><input type="radio" name="alarm-recurrence" value="once" checked><span>一回だけ</span></label>
             <label><input type="radio" name="alarm-recurrence" value="daily"><span>毎日</span></label>
@@ -164,7 +164,7 @@
       <div class="dialog-body">
         <section class="settings-section">
           <div class="settings-heading"><h3>起床時刻</h3><p id="wake-date-note">タイマー開始後に変更できます。</p></div>
-          <div class="inline-controls"><label class="field"><span>時刻</span><input id="wake-time-input" type="time" step="60" disabled></label><button class="ghost-button" id="save-wake-time" type="button" disabled>変更</button></div>
+          <div class="inline-controls"><label class="field"><span>時刻</span><span class="time-selects" id="wake-time-input"><select class="hours-select" aria-label="時" disabled></select><span>時</span><select class="minutes-select" aria-label="分" disabled></select><span>分</span></span></label><button class="ghost-button" id="save-wake-time" type="button" disabled>変更</button></div>
           <div class="adjust-buttons"><button type="button" data-adjust="-30" disabled>−30分</button><button type="button" data-adjust="-10" disabled>−10分</button><button type="button" data-adjust="10" disabled>＋10分</button><button type="button" data-adjust="30" disabled>＋30分</button></div>
           <button class="danger-button full-width" id="end-day-button" type="button" disabled>今日を終了</button>
         </section>
@@ -183,7 +183,7 @@
       </div>
     </dialog>
 
-    <template id="schedule-row-template"><div class="schedule-editor-row"><label class="field"><span>開始</span><input class="start-input" type="text" inputmode="numeric" placeholder="0:00"></label><span class="range-arrow">→</span><label class="field"><span>終了</span><input class="end-input" type="text" inputmode="numeric" placeholder="1:00"></label><label class="field label-field"><span>内容</span><input class="label-input" type="text" maxlength="40" placeholder="予定の内容"></label><button class="delete-button" type="button">削除</button></div></template>
+    <template id="schedule-row-template"><div class="schedule-editor-row"><label class="field"><span>開始</span><span class="time-selects compact-time start-time"><select class="hours-select" aria-label="開始時間"></select><span>:</span><select class="minutes-select" aria-label="開始分"></select></span></label><span class="range-arrow">→</span><label class="field"><span>終了</span><span class="time-selects compact-time end-time"><select class="hours-select" aria-label="終了時間"></select><span>:</span><select class="minutes-select" aria-label="終了分"></select></span></label><label class="field label-field"><span>内容</span><input class="label-input" type="text" maxlength="40" placeholder="予定の内容"></label><button class="delete-button" type="button">削除</button></div></template>
     <script src="./app.js"></script>
   </body>
 </html>
