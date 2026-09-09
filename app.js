@@ -7,7 +7,6 @@ const STORAGE_KEYS = {
 };
 
 const SYNC_HASH_PREFIX = "#sync=";
-const SYNC_POLL_INTERVAL = 2000;
 const SYNC_SECRET_PATTERN = /^[A-Za-z0-9_-]{43}$/;
 
 const DEFAULT_SCHEDULE = [
@@ -64,6 +63,10 @@ let syncSecret = readSyncSecretFromLocation();
 let syncVersion = 0;
 let syncDirty = false;
 let syncRequestInFlight = false;
+let syncRefreshPending = false;
+let syncSubscriptionController = null;
+let syncReconnectTimer = null;
+let syncReconnectDelay = 1000;
 let localMutationVersion = 0;
 
 function cloneDefaultSchedule() {
@@ -167,7 +170,7 @@ function renderSyncControls() {
   elements.syncDescription.textContent = !syncApiAvailable
     ? "リアルタイム同期は、Vercel版の公開URLで利用できます。"
     : active
-    ? "このページの共有リンクを開いた端末と、起床時刻・終了状態・予定を同期します。"
+    ? "このページの共有リンクを開いた端末へ、操作があったときだけ変更を送ります。"
     : "共有ルームを作ると、同じリンクを開いた端末へ変更が反映されます。";
   if (!active) {
     const detail = syncApiAvailable
@@ -226,7 +229,7 @@ async function pushSyncState() {
   const result = await requestSync("PUT", { state: getLocalSyncState() });
   syncVersion = result.version;
   if (mutationAtStart === localMutationVersion) syncDirty = false;
-  setSyncStatus("connected", "変更を同期しました。共有リンクを別の端末で開いてください。");
+  setSyncStatus("connected", "変更を同期しました。状態の定期取得は行いません。");
 }
 
 async function pullSyncState() {
@@ -235,11 +238,15 @@ async function pullSyncState() {
     applyRemoteState(result.state);
     syncVersion = result.version;
   }
-  setSyncStatus("connected", "他の端末と同期されています。変更は約2秒以内に反映されます。");
+  setSyncStatus("connected", "他の端末と接続中です。操作があるとすぐに反映されます。");
 }
 
 async function synchronizeState() {
-  if (!syncSecret || syncRequestInFlight) return;
+  if (!syncSecret) return;
+  if (syncRequestInFlight) {
+    syncRefreshPending = true;
+    return;
+  }
   if (window.location.hostname.endsWith("github.io")) {
     setSyncStatus("error", "このURLでは同期APIを利用できません。Vercel版を開いてください。");
     return;
@@ -258,6 +265,70 @@ async function synchronizeState() {
     }
   } finally {
     syncRequestInFlight = false;
+    if (syncRefreshPending) {
+      syncRefreshPending = false;
+      queueMicrotask(synchronizeState);
+    }
+  }
+}
+
+function stopSyncSubscription() {
+  if (syncReconnectTimer) window.clearTimeout(syncReconnectTimer);
+  syncReconnectTimer = null;
+  if (syncSubscriptionController) syncSubscriptionController.abort();
+  syncSubscriptionController = null;
+}
+
+function scheduleSyncReconnect() {
+  if (!syncSecret || document.hidden || window.location.hostname.endsWith("github.io")) return;
+  if (syncReconnectTimer) window.clearTimeout(syncReconnectTimer);
+  syncReconnectTimer = window.setTimeout(() => {
+    syncReconnectTimer = null;
+    void connectSyncSubscription();
+  }, syncReconnectDelay);
+  syncReconnectDelay = Math.min(syncReconnectDelay * 2, 30_000);
+}
+
+function handleSyncEventLine(line) {
+  if (!line.startsWith("data:")) return;
+  const data = line.slice(5).trim();
+  if (data.startsWith("message,")) void synchronizeState();
+}
+
+async function connectSyncSubscription() {
+  if (!syncSecret || document.hidden || window.location.hostname.endsWith("github.io")) return;
+  stopSyncSubscription();
+  const controller = new AbortController();
+  syncSubscriptionController = controller;
+
+  try {
+    const response = await window.fetch("/api/events", {
+      method: "GET",
+      headers: { Authorization: `Bearer ${syncSecret}` },
+      cache: "no-store",
+      signal: controller.signal,
+    });
+    if (!response.ok || !response.body) throw new Error("変更通知へ接続できませんでした。");
+    syncReconnectDelay = 1000;
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split(/\r?\n/);
+      buffer = lines.pop() || "";
+      lines.forEach(handleSyncEventLine);
+    }
+  } catch (error) {
+    if (error.name !== "AbortError") {
+      setSyncStatus("error", "変更通知が切れました。再接続しています…");
+    }
+  } finally {
+    if (syncSubscriptionController === controller) syncSubscriptionController = null;
+    if (!controller.signal.aborted) scheduleSyncReconnect();
   }
 }
 
@@ -268,6 +339,7 @@ async function createSyncRoom() {
   setSyncStatus("connecting", "共有ルームを作成しています…");
   syncDirty = true;
   await synchronizeState();
+  void connectSyncSubscription();
 }
 
 async function copySyncLink() {
@@ -284,6 +356,7 @@ function leaveSyncRoom() {
   syncSecret = null;
   syncVersion = 0;
   syncDirty = false;
+  stopSyncSubscription();
   window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
   renderSyncControls();
 }
@@ -293,6 +366,7 @@ async function initializeSync() {
   if (!syncSecret) return;
   setSyncStatus("connecting", "共有データを読み込んでいます…");
   await synchronizeState();
+  void connectSyncSubscription();
 }
 
 function getElapsedMilliseconds(now = Date.now()) {
@@ -626,6 +700,9 @@ document.addEventListener("visibilitychange", () => {
     lastRenderedSecond = -1;
     renderTimer();
     void synchronizeState();
+    void connectSyncSubscription();
+  } else {
+    stopSyncSubscription();
   }
 });
 
@@ -634,5 +711,4 @@ syncWakeControls();
 renderScheduleEditor();
 renderTimer();
 void initializeSync();
-window.setInterval(synchronizeState, SYNC_POLL_INTERVAL);
 window.requestAnimationFrame(tick);

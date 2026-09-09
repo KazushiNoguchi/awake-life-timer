@@ -86,6 +86,7 @@ export default async function handler(request, response) {
 
   const roomHash = createHash("sha256").update(secret).digest("hex");
   const redisKey = `awake:room:v1:${roomHash}`;
+  const eventChannel = `awake:events:v1:${roomHash}`;
 
   try {
     if (request.method === "GET") {
@@ -111,6 +112,7 @@ export default async function handler(request, response) {
 
     const record = { version: Date.now(), state };
     await redisCommand(["SET", redisKey, JSON.stringify(record)]);
+    await redisCommand(["PUBLISH", eventChannel, String(record.version)]);
     send(response, 200, record);
   } catch (error) {
     console.error("State sync failed:", error);
