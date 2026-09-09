@@ -344,6 +344,10 @@ function createTimedItem(kind) {
     targetTimestamp = state.wakeTimestamp + duration * 60000;
   } else targetTimestamp = nextClockTimestamp(selectedClock, now);
 
+  if (kind === "alarm" && recurrence === "once" && targetTimestamp <= now) {
+    throw new Error("一回だけのアラームは、これから先の時刻に設定してください。");
+  }
+
   return { id: uid(), timeMode: mode, durationMinutes: duration, clockMinutes, targetTimestamp: recurrence === "once" ? targetTimestamp : null, recurrence, weekdays, createdAt: now, createdLifeDate: currentLifeDate(now) };
 }
 
