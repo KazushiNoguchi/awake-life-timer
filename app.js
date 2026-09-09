@@ -159,13 +159,22 @@ function setSyncStatus(kind, detail) {
 
 function renderSyncControls() {
   const active = Boolean(syncSecret);
+  const syncApiAvailable = !window.location.hostname.endsWith("github.io");
   elements.createSyncRoom.hidden = active;
+  elements.createSyncRoom.disabled = !syncApiAvailable;
   elements.copySyncLink.hidden = !active;
   elements.leaveSyncRoom.hidden = !active;
-  elements.syncDescription.textContent = active
+  elements.syncDescription.textContent = !syncApiAvailable
+    ? "リアルタイム同期は、Vercel版の公開URLで利用できます。"
+    : active
     ? "このページの共有リンクを開いた端末と、起床時刻・終了状態・予定を同期します。"
     : "共有ルームを作ると、同じリンクを開いた端末へ変更が反映されます。";
-  if (!active) setSyncStatus("local", "現在、この端末内だけに保存されています。");
+  if (!active) {
+    const detail = syncApiAvailable
+      ? "現在、この端末内だけに保存されています。"
+      : "現在は端末内保存です。Vercelの初期設定後に同期を有効化できます。";
+    setSyncStatus("local", detail);
+  }
 }
 
 function markStateChanged() {
@@ -231,6 +240,10 @@ async function pullSyncState() {
 
 async function synchronizeState() {
   if (!syncSecret || syncRequestInFlight) return;
+  if (window.location.hostname.endsWith("github.io")) {
+    setSyncStatus("error", "このURLでは同期APIを利用できません。Vercel版を開いてください。");
+    return;
+  }
   syncRequestInFlight = true;
   try {
     if (syncDirty) await pushSyncState();
