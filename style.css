@@ -1,0 +1,536 @@
+:root {
+  color-scheme: light dark;
+  --background: #f4f2ed;
+  --surface: #fbfaf7;
+  --text: #252525;
+  --muted: #74736e;
+  --line: #d8d5cd;
+  --accent: #315f59;
+  --accent-soft: #dce8e4;
+  --danger: #9a3f38;
+  --shadow: 0 20px 60px rgb(37 37 37 / 8%);
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans JP", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  min-width: 320px;
+  background: var(--background);
+}
+
+body {
+  margin: 0;
+  color: var(--text);
+  background: var(--background);
+  line-height: 1.5;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+button {
+  color: inherit;
+}
+
+button:not(:disabled) {
+  cursor: pointer;
+}
+
+button:focus-visible,
+input:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--accent), transparent 55%);
+  outline-offset: 2px;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+.app-shell {
+  width: min(100% - 32px, 720px);
+  margin: 0 auto;
+  padding: 48px 0 64px;
+}
+
+.hero {
+  padding: 12px 0 48px;
+  text-align: center;
+  border-bottom: 1px solid var(--line);
+}
+
+.hero-topline,
+.section-heading-row,
+.settings-heading-row,
+.wake-time-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.eyebrow,
+.section-label {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+}
+
+.clock-time {
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.inactive-view {
+  padding: 80px 0 32px;
+}
+
+.inactive-copy {
+  margin: 0 0 24px;
+  color: var(--muted);
+  font-size: 1rem;
+}
+
+.primary-button,
+.secondary-button,
+.danger-outline-button,
+.text-button,
+.icon-button,
+.adjust-buttons button,
+.delete-button {
+  min-height: 44px;
+  border-radius: 8px;
+  transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease;
+}
+
+.primary-button {
+  border: 1px solid var(--accent);
+  color: #fff;
+  background: var(--accent);
+  padding: 11px 20px;
+  font-weight: 700;
+}
+
+.primary-button:hover {
+  background: color-mix(in srgb, var(--accent), #000 12%);
+}
+
+.wake-button {
+  width: min(100%, 300px);
+  min-height: 64px;
+  font-size: 1.15rem;
+}
+
+.active-view {
+  padding-top: 36px;
+}
+
+.timer {
+  display: block;
+  font-size: clamp(3.1rem, 13vw, 6.75rem);
+  font-weight: 620;
+  letter-spacing: -0.055em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.current-block {
+  padding: 44px 0 32px;
+}
+
+.current-label {
+  margin: 10px 0 2px;
+  font-size: clamp(1.5rem, 6vw, 2.2rem);
+  font-weight: 700;
+}
+
+.current-range,
+.remaining,
+.next-content {
+  margin: 3px 0 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.current-range {
+  color: var(--muted);
+}
+
+.remaining {
+  font-weight: 600;
+}
+
+.progress-track {
+  overflow: hidden;
+  width: min(100%, 430px);
+  height: 5px;
+  margin: 22px auto 0;
+  border-radius: 99px;
+  background: var(--line);
+}
+
+.progress-fill {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width 150ms ease;
+}
+
+.next-block {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: baseline;
+  gap: 20px;
+  max-width: 430px;
+  margin: 0 auto;
+  padding: 20px 0 0;
+  text-align: left;
+  border-top: 1px solid var(--line);
+}
+
+.next-content {
+  font-weight: 650;
+}
+
+.schedule-section {
+  padding-top: 42px;
+}
+
+.section-heading-row h1,
+.dialog-header h2 {
+  margin: 6px 0 0;
+  font-size: 1.3rem;
+}
+
+.text-button,
+.icon-button {
+  border: 1px solid var(--line);
+  background: transparent;
+  padding: 8px 15px;
+}
+
+.text-button:hover,
+.icon-button:hover,
+.adjust-buttons button:hover,
+.secondary-button:hover {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+
+.schedule-list {
+  margin: 26px 0 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--line);
+}
+
+.schedule-item {
+  display: grid;
+  grid-template-columns: 74px 1fr;
+  gap: 20px;
+  align-items: center;
+  min-height: 58px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.schedule-item time {
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.schedule-item.is-current {
+  border-left: 3px solid var(--accent);
+  background: var(--accent-soft);
+}
+
+.schedule-item.is-current time,
+.schedule-item.is-current .schedule-item-label {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.schedule-item.is-past {
+  opacity: 0.5;
+}
+
+.settings-dialog {
+  width: min(calc(100% - 24px), 760px);
+  max-height: min(90vh, 920px);
+  padding: 0;
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.settings-dialog::backdrop {
+  background: rgb(20 20 20 / 45%);
+}
+
+.dialog-header {
+  position: sticky;
+  z-index: 2;
+  top: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.icon-button {
+  width: 44px;
+  padding: 0;
+  font-size: 1.5rem;
+}
+
+.dialog-body {
+  padding: 0 24px 28px;
+}
+
+.settings-section {
+  padding: 30px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.settings-section:last-child {
+  border-bottom: 0;
+}
+
+.settings-section h3,
+.settings-section p {
+  margin-top: 0;
+}
+
+.settings-section h3 {
+  margin-bottom: 4px;
+  font-size: 1rem;
+}
+
+.settings-section p {
+  margin-bottom: 18px;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.wake-time-controls {
+  align-items: end;
+  justify-content: start;
+}
+
+.field {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+}
+
+.field span {
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 650;
+}
+
+.field input {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: 8px 10px;
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface);
+}
+
+.field input:disabled,
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.compact-field {
+  width: 150px;
+}
+
+.secondary-button {
+  padding: 9px 16px;
+  border: 1px solid var(--line);
+  background: transparent;
+  font-weight: 650;
+}
+
+.small-button {
+  flex: 0 0 auto;
+  font-size: 0.85rem;
+}
+
+.adjust-buttons {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.adjust-buttons button {
+  padding: 8px;
+  border: 1px solid var(--line);
+  background: transparent;
+}
+
+.full-width {
+  width: 100%;
+  margin-top: 18px;
+}
+
+.danger-outline-button {
+  padding: 10px 16px;
+  color: var(--danger);
+  border: 1px solid color-mix(in srgb, var(--danger), transparent 35%);
+  background: transparent;
+  font-weight: 650;
+}
+
+.danger-outline-button:hover:not(:disabled) {
+  color: #fff;
+  background: var(--danger);
+}
+
+.schedule-editor {
+  display: grid;
+  gap: 12px;
+}
+
+.schedule-editor-row {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 76px 18px 76px 1fr auto;
+  gap: 8px;
+  align-items: end;
+  padding-bottom: 12px;
+  border-bottom: 1px dashed var(--line);
+}
+
+.range-arrow {
+  align-self: center;
+  margin-top: 20px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.delete-button {
+  padding: 8px 10px;
+  color: var(--danger);
+  border: 1px solid transparent;
+  background: transparent;
+  font-size: 0.82rem;
+}
+
+.delete-button:hover {
+  border-color: var(--danger);
+}
+
+.error-summary {
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  color: var(--danger);
+  border-left: 3px solid var(--danger);
+  background: color-mix(in srgb, var(--danger), transparent 92%);
+  font-size: 0.88rem;
+}
+
+.reset-section p {
+  margin-bottom: 0;
+}
+
+@media (max-width: 580px) {
+  .app-shell {
+    width: min(100% - 28px, 720px);
+    padding-top: 28px;
+  }
+
+  .inactive-view {
+    padding-top: 60px;
+  }
+
+  .timer {
+    font-size: clamp(2.8rem, 16vw, 5rem);
+  }
+
+  .schedule-editor-row {
+    grid-template-columns: 1fr 18px 1fr auto;
+  }
+
+  .label-field {
+    grid-column: 1 / 4;
+  }
+
+  .delete-button {
+    grid-column: 4;
+    grid-row: 2;
+  }
+
+  .settings-heading-row {
+    align-items: flex-start;
+  }
+
+  .adjust-buttons {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 380px) {
+  .app-shell {
+    width: calc(100% - 24px);
+  }
+
+  .dialog-header,
+  .dialog-body {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .schedule-item {
+    grid-template-columns: 64px 1fr;
+    gap: 12px;
+  }
+
+  .small-button {
+    padding-inline: 10px;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #171918;
+    --surface: #202321;
+    --text: #f0f0ec;
+    --muted: #aaa9a3;
+    --line: #3a3d3b;
+    --accent: #8ac2b7;
+    --accent-soft: #243c37;
+    --danger: #ec8c83;
+    --shadow: 0 20px 60px rgb(0 0 0 / 32%);
+  }
+
+  .primary-button {
+    color: #10201d;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+  }
+}
